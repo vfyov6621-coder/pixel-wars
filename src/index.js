@@ -125,15 +125,14 @@ async function start() {
   console.log('  PIXEL WARS — Запуск сервера');
   console.log('='.repeat(50));
 
-  // 1. Проверяем подключение к PostgreSQL
+  // 1. Проверяем подключение к PostgreSQL (не блокируем запуск)
   console.log('\n[Startup] Подключение к PostgreSQL...');
   const dbOk = await testConnection();
   if (!dbOk) {
-    console.error('[Startup] ФАТАЛЬНАЯ ОШИБКА: Нет подключения к PostgreSQL. Проверьте DATABASE_URL.');
-    process.exit(1);
+    console.warn('[Startup] PostgreSQL недоступен. API endpoints будут возвращать 500. Сервер всё равно запущен.');
   }
 
-  // 2. Подключаем Redis
+  // 2. Подключаем Redis (не блокируем запуск)
   console.log('[Startup] Подключение к Redis...');
   const redis = getRedisClient();
   redis.on('connect', () => {

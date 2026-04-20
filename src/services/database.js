@@ -19,8 +19,8 @@ function getPool() {
 
   const dbUrl = process.env.DATABASE_URL;
   if (!dbUrl) {
-    console.error('[Database] DATABASE_URL не задан в .env');
-    process.exit(1);
+    console.warn('[Database] DATABASE_URL не задан — БД недоступна. Сервер запустится без БД (health-check).');
+    return null;
   }
 
   pool = new Pool({
