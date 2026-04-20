@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  # PostgreSQL — основная БД
+  postgres:
+    image: postgres:14-alpine
+    container_name: pixelwars-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pixelwars
+      POSTGRES_USER: pixelwars
+      POSTGRES_PASSWORD: pixelwars
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pixelwars -d pixelwars"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis — кэш, сессии, rate limits
+  redis:
+    image: redis:7-alpine
+    container_name: pixelwars-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Pixel Wars — сервер приложения
+  app:
+    build: .
+    container_name: pixelwars-app
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      NODE_ENV: production
+      DATABASE_URL: postgresql://pixelwars:pixelwars@postgres:5432/pixelwars
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-change_me_to_random_64_chars}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME}
+      FRONTEND_URL: ${FRONTEND_URL:-https://pixelwars.yourdomain.com}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:

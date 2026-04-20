@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pixel Wars — Трансляция</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0a0a1a;
+      color: #eee;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 20px;
+      background: #1a1a2e;
+      border-bottom: 2px solid #e94560;
+    }
+
+    .header h1 {
+      font-size: 20px;
+      color: #e94560;
+    }
+
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      background: #e94560;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: bold;
+      color: white;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    .live-badge::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      background: white;
+      border-radius: 50%;
+    }
+
+    .canvas-container {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    #spectator-canvas {
+      max-width: 100%;
+      max-height: 100%;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+
+    .stats-bar {
+      display: flex;
+      justify-content: space-around;
+      padding: 10px 20px;
+      background: #1a1a2e;
+      border-top: 1px solid #333;
+      font-size: 13px;
+    }
+
+    .stat {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .stat-label {
+      color: #888;
+    }
+
+    .stat-value {
+      color: #e94560;
+      font-weight: bold;
+    }
+
+    .queue-info {
+      padding: 8px 20px;
+      background: rgba(233, 69, 96, 0.1);
+      text-align: center;
+      font-size: 13px;
+      color: #e94560;
+      border-bottom: 1px solid rgba(233, 69, 96, 0.3);
+      display: none;
+    }
+
+    .fps-counter {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      color: #0f0;
+      font-family: monospace;
+    }
+
+    .loading-overlay {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.8);
+    }
+
+    .loading-text {
+      font-size: 18px;
+      color: #e94560;
+    }
+
+    .notification {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1a1a2e;
+      border: 1px solid #e94560;
+      padding: 12px 24px;
+      border-radius: 8px;
+      color: #eee;
+      font-size: 14px;
+      z-index: 1000;
+      display: none;
+      animation: fadeInUp 0.3s ease;
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>Pixel Wars</h1>
+    <div class="live-badge">LIVE ТРАНСЛЯЦИЯ</div>
+  </div>
+
+  <div class="queue-info" id="queue-info">
+    Очередь на подключение: <span id="queue-position">?</span> мест впереди
+  </div>
+
+  <div class="canvas-container">
+    <div class="loading-overlay" id="loading">
+      <div class="loading-text">Подключение к трансляции...</div>
+    </div>
+    <img id="spectator-canvas" alt="Pixel Wars — Трансляция">
+    <div class="fps-counter" id="fps">0 FPS</div>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat">
+      <span class="stat-label">Игроков:</span>
+      <span class="stat-value" id="stat-online">0</span>
+      <span class="stat-label">/ 65</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Зрителей:</span>
+      <span class="stat-value" id="stat-spectators">0</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Обновление:</span>
+      <span class="stat-value" id="stat-fps">0</span>
+      <span class="stat-label">кадр/мин</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Время просмотра:</span>
+      <span class="stat-value" id="stat-uptime">00:00</span>
+    </div>
+  </div>
+
+  <div class="notification" id="notification"></div>
+
+  <script>
+    // ============================================================
+    // spectator.html — Страница трансляции Pixel Wars
+    // Получает JPEG-кадры через Socket.io, отображает на <img>
+    // ============================================================
+
+    const canvas = document.getElementById('spectator-canvas');
+    const loadingEl = document.getElementById('loading');
+    const fpsEl = document.getElementById('fps');
+    const fpsCounterEl = document.getElementById('fps');
+    const onlineEl = document.getElementById('stat-online');
+    const spectatorsEl = document.getElementById('stat-spectators');
+    const fpsStatEl = document.getElementById('stat-fps');
+    const uptimeEl = document.getElementById('stat-uptime');
+    const queueInfoEl = document.getElementById('queue-info');
+    const queuePosEl = document.getElementById('queue-position');
+    const notificationEl = document.getElementById('notification');
+
+    let frameCount = 0;
+    let lastFpsUpdate = Date.now();
+    const startTime = Date.now();
+    let socket = null;
+
+    // --- FPS счётчик ---
+    setInterval(() => {
+      const now = Date.now();
+      const elapsed = (now - lastFpsUpdate) / 1000;
+      const fps = Math.round(frameCount / elapsed);
+      fpsEl.textContent = `${fps} FPS`;
+      fpsStatEl.textContent = fps;
+      frameCount = 0;
+      lastFpsUpdate = now;
+    }, 1000);
+
+    // --- Время просмотра ---
+    setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      const min = String(Math.floor(elapsed / 60)).padStart(2, '0');
+      const sec = String(elapsed % 60).padStart(2, '0');
+      uptimeEl.textContent = `${min}:${sec}`;
+    }, 1000);
+
+    // --- Уведомления ---
+    function showNotification(message, duration = 5000) {
+      notificationEl.textContent = message;
+      notificationEl.style.display = 'block';
+      setTimeout(() => {
+        notificationEl.style.display = 'none';
+      }, duration);
+    }
+
+    // --- Подключение к трансляции ---
+    function connectSpectator() {
+      // Получаем токен из URL параметра или localStorage
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('token') || localStorage.getItem('pw_token');
+
+      if (!token) {
+        loadingEl.innerHTML = '<div class="loading-text">Войдите через Telegram для просмотра</div>';
+        return;
+      }
+
+      const serverUrl = window.location.origin;
+      const wsUrl = serverUrl.replace(/^http/, 'ws');
+
+      socket = new WebSocket(`${wsUrl}/socket.io/?EIO=4&transport=websocket&token=${token}`);
+
+      socket.onopen = () => {
+        console.log('[Spectator] WebSocket подключён');
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const data = event.data;
+          if (typeof data === 'string' && data.startsWith('42')) {
+            const jsonStr = data.slice(2);
+            const parsed = JSON.parse(jsonStr);
+            const eventName = parsed[0];
+            const eventData = parsed[1];
+            handleEvent(eventName, eventData);
+          }
+        } catch (e) {}
+      };
+
+      socket.onerror = (err) => {
+        console.error('[Spectator] Ошибка WebSocket');
+        loadingEl.innerHTML = '<div class="loading-text">Ошибка подключения. Переподключение...</div>';
+        setTimeout(connectSpectator, 5000);
+      };
+
+      socket.onclose = () => {
+        console.log('[Spectator] WebSocket закрыт');
+        setTimeout(connectSpectator, 5000);
+      };
+    }
+
+    function handleEvent(eventName, data) {
+      switch (eventName) {
+        case 'mode:spectator':
+          loadingEl.style.display = 'none';
+          onlineEl.textContent = data.currentOnline;
+          if (data.yourPosition > 0) {
+            queueInfoEl.style.display = 'block';
+            queuePosEl.textContent = data.yourPosition;
+            showNotification(`Вы в очереди на место игрока (позиция: ${data.yourPosition})`);
+          }
+          // Запрашиваем обновление статуса
+          break;
+
+        case 'mode:player':
+          loadingEl.style.display = 'none';
+          queueInfoEl.style.display = 'none';
+          showNotification('Место освободилось! Перенаправляем на игру...', 3000);
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 3000);
+          break;
+
+        case 'spectator:snapshot':
+          if (data && data.image) {
+            canvas.src = data.image;
+            frameCount++;
+          }
+          break;
+
+        case 'server:status':
+          if (data) {
+            onlineEl.textContent = data.online || '?';
+            spectatorsEl.textContent = data.spectators || '?';
+          }
+          break;
+
+        case 'access:denied':
+          loadingEl.innerHTML = `<div class="loading-text">Доступ запрещён: ${data.message || data.reason}</div>`;
+          break;
+
+        case 'error':
+          console.warn('[Spectator] Ошибка:', data);
+          break;
+      }
+    }
+
+    // --- Запуск ---
+    connectSpectator();
+
+    // --- Уведомления через Notification API ---
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    // Уведомление когда место освободится
+    function notifySlotAvailable() {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('Pixel Wars', {
+          body: 'Освободилось место для игры!',
+          icon: '/favicon.ico',
+        });
+      }
+    }
+  </script>
+
+</body>
+</html>

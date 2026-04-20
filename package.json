@@ -1,0 +1,28 @@
+{
+  "name": "pixel-wars",
+  "version": "1.0.0",
+  "description": "Pixel Wars — мультиплеерная пиксельная игра (аналог r/place от Reddit)",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "init-db": "node scripts/init-db.js"
+  },
+  "keywords": ["pixel", "wars", "game", "multiplayer", "websocket"],
+  "author": "vfyov6621-coder",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.4",
+    "helmet": "^7.1.0",
+    "ioredis": "^5.3.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.11.3",
+    "sharp": "^0.33.2",
+    "socket.io": "^4.7.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
